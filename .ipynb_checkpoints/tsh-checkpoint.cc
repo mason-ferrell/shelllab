@@ -169,19 +169,22 @@ void eval(char *cmdline)
     
   if(!builtin_cmd(argv)){
       if((pid=Fork())==0){
+          setpgid(0,0);
           if(execve(argv[0],argv,environ)<0){
               printf("%s: Command not found.\n", argv[0]);
               exit(0);
           }
       }
       
+      
+      
       if(!bg){
           addjob(jobs, pid, FG, cmdline);
           waitfg(pid);
       }
       else{
-          printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
           addjob(jobs, pid, BG, cmdline);
+          printf("[%d] (%d) %s", pid2jid(pid), pid, cmdline);
       }
   }
 
@@ -247,7 +250,7 @@ void do_bgfg(char **argv)
       printf("%s: No such job\n", argv[1]);
       return;
     }
-  }	    
+  }
   else {
     printf("%s: argument must be a PID or %%jobid\n", argv[0]);
     return;
@@ -306,6 +309,7 @@ void sigchld_handler(int sig)
 {
   int status;
   pid_t pid;
+  
   
   while((pid = waitpid(fgpid(jobs),&status,0))>0){
       if(WIFSIGNALED(status)){
