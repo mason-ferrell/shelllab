@@ -175,7 +175,7 @@ void eval(char *cmdline)
       
       if((pid=Fork())==0){
           setpgid(0,0);
-          if(execve(argv[0],argv,environ)<0){
+          if(execvp(argv[0],argv)<0){
               printf("%s: Command not found.\n", argv[0]);
               exit(0);
           }
@@ -226,6 +226,11 @@ int builtin_cmd(char **argv)
   }
   
   else if(!strcmp(argv[0],"bg")){
+      do_bgfg(argv);
+      return 1;
+  }
+  
+  else if(!strcmp(argv[0],"fg")){
       do_bgfg(argv);
       return 1;
   }
@@ -284,6 +289,10 @@ void do_bgfg(char **argv)
   if(!strcmp("bg",argv[0])){
       printf("[%d] (%d) %s",jobp->jid,pid,jobp->cmdline);
       jobp->state = BG;
+  }
+  else{
+      jobp->state = FG;
+      waitfg(pid);
   }
 
   return;
