@@ -158,6 +158,7 @@ void eval(char *cmdline)
   //
   char *argv[MAXARGS];
   pid_t pid;
+  sigset_t mask;
 
   //
   // The 'bg' variable is TRUE if the job should run
@@ -168,6 +169,10 @@ void eval(char *cmdline)
     return;   /* ignore empty lines */
     
   if(!builtin_cmd(argv)){
+      sigemptyset(&mask);
+      sigaddset(&mask,SIGCHLD);
+      sigprocmask(SIG_BLOCK,&mask,NULL);
+      
       if((pid=Fork())==0){
           setpgid(0,0);
           if(execve(argv[0],argv,environ)<0){
@@ -177,9 +182,9 @@ void eval(char *cmdline)
       }
       
       
-      
       if(!bg){
           addjob(jobs, pid, FG, cmdline);
+          sigprocmask(SIG_UNBLOCK,&mask,NULL);
           waitfg(pid);
       }
       else{
@@ -219,6 +224,12 @@ int builtin_cmd(char **argv)
       listjobs(jobs);
       return 1;
   }
+  
+  else if(!strcmp(argv[0],"bg")){
+      do_bgfg(argv);
+      return 1;
+  }
+    
   return 0;     /* not a builtin command */
 }
 
@@ -266,7 +277,14 @@ void do_bgfg(char **argv)
   // your benefit.
   //
   string cmd(argv[0]);
-  
+    
+  pid_t pid = jobp->pid;
+  kill(-pid,SIGCONT);
+    
+  if(!strcmp("bg",argv[0])){
+      printf("[%d] (%d) %s",jobp->jid,pid,jobp->cmdline);
+      jobp->state = BG;
+  }
 
   return;
 }
@@ -311,11 +329,17 @@ void sigchld_handler(int sig)
   pid_t pid;
   
   
-  while((pid = waitpid(fgpid(jobs),&status,0))>0){
+  while((pid = waitpid(fgpid(jobs),&status,WUNTRACED))>0){
       if(WIFSIGNALED(status)){
           int jid = pid2jid(pid);
           printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, WTERMSIG(status));
           deletejob(jobs,pid);
+      }
+      
+      else if(WIFSTOPPED(status)){
+          getjobpid(jobs,pid)->state = ST;
+          int jid = pid2jid(pid);
+          printf("Job [%d] (%d) stopped by signal %d\n", jid, pid, WSTOPSIG(status));
       }
       
       else if(WIFEXITED(status)){
@@ -348,6 +372,9 @@ void sigint_handler(int sig)
 //
 void sigtstp_handler(int sig) 
 {
+  pid_t pid = fgpid(jobs);
+  if(pid != 0)
+      kill(-pid,sig);
   return;
 }
 
