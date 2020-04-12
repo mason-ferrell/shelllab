@@ -338,7 +338,7 @@ void sigchld_handler(int sig)
   pid_t pid;
   
   
-  while((pid = waitpid(fgpid(jobs),&status,WUNTRACED))>0){
+  while((pid = waitpid(fgpid(jobs),&status,WUNTRACED|WNOHANG))>0){
       if(WIFSIGNALED(status)){
           int jid = pid2jid(pid);
           printf("Job [%d] (%d) terminated by signal %d\n", jid, pid, WTERMSIG(status));
